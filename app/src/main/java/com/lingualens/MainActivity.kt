@@ -5,25 +5,29 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.lingualens.ui.theme.LinguaLensTheme
+import java.net.URLDecoder
+import java.net.URLEncoder
+
+sealed class Screen(val route: String) {
+    data object Camera : Screen("camera")
+    data object Save : Screen("save_screen/{originalLabel}/{translatedLabel}") {
+        fun createRoute(originalLabel: String, translatedLabel: String): String {
+            // URL-encode arguments to handle special characters
+            val encodedOriginal = URLEncoder.encode(originalLabel, "UTF-8")
+            val encodedTranslated = URLEncoder.encode(translatedLabel, "UTF-8")
+            return "save_screen/$encodedOriginal/$encodedTranslated"
+        }
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,58 +41,43 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@PreviewScreenSizes
 @Composable
 fun LinguaLensApp() {
-    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+    val navController = rememberNavController()
 
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            AppDestinations.entries.forEach {
-                item(
-                    icon = {
-                        Icon(
-                            it.icon,
-                            contentDescription = it.label
-                        )
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestination = it }
+    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Camera.route,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Camera Screen Route
+            composable(Screen.Camera.route) {
+                CameraScreen(navController = navController)
+            }
+
+            // Save Screen Route
+            composable(
+                route = Screen.Save.route,
+                arguments = listOf(
+                    navArgument("originalLabel") { type = NavType.StringType },
+                    navArgument("translatedLabel") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                // Decode arguments
+                val originalLabel = URLDecoder.decode(
+                    backStackEntry.arguments?.getString("originalLabel") ?: "", "UTF-8"
+                )
+                val translatedLabel = URLDecoder.decode(
+                    backStackEntry.arguments?.getString("translatedLabel") ?: "", "UTF-8"
+                )
+
+                SaveScreen(
+                    navController = navController,
+                    originalLabel = originalLabel,
+                    translatedLabel = translatedLabel
                 )
             }
         }
-    ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            Greeting(
-                name = "Android",
-                modifier = Modifier.padding(innerPadding)
-            )
-        }
-    }
-}
-
-enum class AppDestinations(
-    val label: String,
-    val icon: ImageVector,
-) {
-    HOME("Home", Icons.Default.Home),
-    FAVORITES("Favorites", Icons.Default.Favorite),
-    PROFILE("Profile", Icons.Default.AccountBox),
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    LinguaLensTheme {
-        Greeting("Android")
     }
 }
