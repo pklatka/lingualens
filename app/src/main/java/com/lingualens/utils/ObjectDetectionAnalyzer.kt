@@ -1,5 +1,6 @@
-package com.lingualens
+package com.lingualens.utils
 
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.google.mlkit.vision.common.InputImage
@@ -20,7 +21,7 @@ class ObjectDetectionAnalyzer(
 
     private val detector = ObjectDetection.getClient(options)
 
-    @androidx.camera.core.ExperimentalGetImage
+    @ExperimentalGetImage
     override fun analyze(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {

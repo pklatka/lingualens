@@ -1,10 +1,11 @@
-package com.lingualens
+package com.lingualens.screens
 
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.os.Build
 import android.os.Environment
@@ -61,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.navigation.NavController
+import com.lingualens.utils.AppDatabase
+import com.lingualens.utils.SavedTranslation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,7 +77,7 @@ import java.util.Locale
 fun FavoritesScreen(navController: NavController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val database = remember { AppDatabase.getDatabase(context) }
+    val database = remember { AppDatabase.Companion.getDatabase(context) }
 
     val translations by database.translationDao()
         .getAllTranslations()
@@ -334,14 +337,14 @@ private suspend fun exportImageWithTranslation(context: Context, translation: Sa
 
             // Draw text
             val textPaint = Paint().apply {
-                color = android.graphics.Color.BLACK
+                color = Color.BLACK
                 textSize = 48f
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
             }
 
             val smallTextPaint = Paint().apply {
-                color = android.graphics.Color.BLACK
+                color = Color.BLACK
                 textSize = 36f
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER

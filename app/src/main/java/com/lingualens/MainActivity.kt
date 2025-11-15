@@ -13,6 +13,9 @@ import androidx.navigation.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.lingualens.screens.CameraScreen
+import com.lingualens.screens.FavoritesScreen
+import com.lingualens.screens.SaveScreen
 import com.lingualens.ui.theme.LinguaLensTheme
 import java.net.URLDecoder
 import java.net.URLEncoder

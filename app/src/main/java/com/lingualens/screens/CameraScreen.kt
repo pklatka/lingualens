@@ -1,4 +1,4 @@
-package com.lingualens
+package com.lingualens.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.lingualens.utils.ObjectDetectionAnalyzer
+import com.lingualens.utils.TranslationManager
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
@@ -105,7 +107,7 @@ fun CameraScreen(navController: NavController) {
 
     LaunchedEffect(selectedLanguage) {
         isModelLoading = true
-        val languageCode = TranslationManager.getLanguageCode(selectedLanguage)
+        val languageCode = TranslationManager.Companion.getLanguageCode(selectedLanguage)
         translationManager.downloadModel(languageCode) { message ->
             loadingMessage = message
         }
@@ -118,7 +120,7 @@ fun CameraScreen(navController: NavController) {
                 title = { Text("LinguaLens") },
                 actions = {
                     IconButton(onClick = {
-                        navController.navigate(Screen.Favorites.route)
+                        navController.navigate(_root_ide_package_.com.lingualens.Screen.Favorites.route)
                     }) {
                         Icon(Icons.Default.Favorite, "Favorites")
                     }
@@ -191,10 +193,10 @@ fun CameraScreen(navController: NavController) {
                                     image.close()
 
                                     // Store bitmap globally (not ideal but simplest for now)
-                                    capturedBitmap = rotatedBitmap
+                                    _root_ide_package_.com.lingualens.capturedBitmap = rotatedBitmap
 
                                     navController.navigate(
-                                        Screen.Save.createRoute(
+                                        _root_ide_package_.com.lingualens.Screen.Save.createRoute(
                                             detection.label,
                                             detection.translatedLabel
                                         )

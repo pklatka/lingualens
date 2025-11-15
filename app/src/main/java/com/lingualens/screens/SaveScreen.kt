@@ -1,5 +1,6 @@
-package com.lingualens
+package com.lingualens.screens
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +42,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.lingualens.utils.AppDatabase
+import com.lingualens.utils.SavedTranslation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -57,7 +61,7 @@ fun SaveScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val database = remember { AppDatabase.getDatabase(context) }
+    val database = remember { AppDatabase.Companion.getDatabase(context) }
 
     var isSaving by remember { mutableStateOf(false) }
     var saveMessage by remember { mutableStateOf<String?>(null) }
@@ -196,7 +200,7 @@ fun SaveScreen(
                                     }
 
                                     saveMessage = "Translation saved successfully!"
-                                    kotlinx.coroutines.delay(1000)
+                                    delay(1000)
                                     navController.popBackStack()
                                 } catch (e: Exception) {
                                     saveMessage = "Failed to save: ${e.message}"
@@ -227,7 +231,7 @@ fun SaveScreen(
     }
 }
 
-private fun saveImageToInternalStorage(context: android.content.Context, bitmap: Bitmap): String {
+private fun saveImageToInternalStorage(context: Context, bitmap: Bitmap): String {
     val filename = "IMG_${System.currentTimeMillis()}.jpg"
     val file = File(context.filesDir, filename)
 

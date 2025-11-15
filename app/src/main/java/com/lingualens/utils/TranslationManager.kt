@@ -1,4 +1,4 @@
-package com.lingualens
+package com.lingualens.utils
 
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage

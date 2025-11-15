@@ -1,4 +1,4 @@
-package com.lingualens
+package com.lingualens.utils
 
 import android.content.Context
 import androidx.room.*
