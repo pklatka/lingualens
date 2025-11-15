@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -119,10 +121,16 @@ fun CameraScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("LinguaLens") },
+                title = {
+                    Image(
+                        painter = painterResource(id = com.lingualens.R.drawable.lingualens_logo_no_bg),
+                        contentDescription = "LinguaLens Logo",
+                        modifier = Modifier.height(35.dp)
+                    )
+                },
                 actions = {
                     IconButton(onClick = {
-                        navController.navigate(_root_ide_package_.com.lingualens.Screen.Favorites.route)
+                        navController.navigate(com.lingualens.Screen.Favorites.route)
                     }) {
                         Icon(Icons.Default.Favorite, "Favorites")
                     }
@@ -160,7 +168,12 @@ fun CameraScreen(navController: NavController) {
                                 val imageAnalysis = ImageAnalysis.Builder()
                                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                     .build()
-                                    .also { it.setAnalyzer(Executors.newSingleThreadExecutor(), analyzer) }
+                                    .also {
+                                        it.setAnalyzer(
+                                            Executors.newSingleThreadExecutor(),
+                                            analyzer
+                                        )
+                                    }
 
                                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
@@ -191,7 +204,10 @@ fun CameraScreen(navController: NavController) {
                                 override fun onCaptureSuccess(image: ImageProxy) {
                                     val bitmap = imageProxyToBitmap(image)
                                     // Rotate bitmap based on image rotation
-                                    val rotatedBitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
+                                    val rotatedBitmap = rotateBitmap(
+                                        bitmap,
+                                        image.imageInfo.rotationDegrees.toFloat()
+                                    )
                                     image.close()
 
                                     // Store bitmap globally (not ideal but simplest for now)
@@ -333,7 +349,21 @@ private fun LanguageSelector(
     onLanguageChange: (String) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val languages = listOf("English", "Spanish", "French", "German", "Italian", "Portuguese", "Polish", "Dutch", "Japanese", "Chinese", "Korean", "Russian", "Arabic")
+    val languages = listOf(
+        "English",
+        "Spanish",
+        "French",
+        "German",
+        "Italian",
+        "Portuguese",
+        "Polish",
+        "Dutch",
+        "Japanese",
+        "Chinese",
+        "Korean",
+        "Russian",
+        "Arabic"
+    )
 
     BottomAppBar {
         Row(
@@ -386,7 +416,10 @@ fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
-fun android.graphics.Rect.toComposeRect(scaleX: Float = 1f, scaleY: Float = 1f): androidx.compose.ui.geometry.Rect {
+fun android.graphics.Rect.toComposeRect(
+    scaleX: Float = 1f,
+    scaleY: Float = 1f
+): androidx.compose.ui.geometry.Rect {
     return androidx.compose.ui.geometry.Rect(
         androidx.compose.ui.geometry.Offset(left * scaleX, top * scaleY),
         androidx.compose.ui.geometry.Size(width() * scaleX, height() * scaleY)
