@@ -9,34 +9,29 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavType
+import androidx.navigation.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.lingualens.ui.theme.LinguaLensTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
 
-// Shared state to pass Bitmap between screens (since Bitmap can't be serialized in navigation)
-object NavigationState {
-    var currentBitmap: Bitmap? = null
-}
-
 sealed class Screen(val route: String) {
     data object Camera : Screen("camera")
-    data object Save : Screen("save_screen/{originalLabel}/{translatedLabel}") {
-        fun createRoute(originalLabel: String, translatedLabel: String, bitmap: Bitmap?): String {
-            // Store bitmap in shared state
-            NavigationState.currentBitmap = bitmap
+    data object Favorites : Screen("favorites")
 
-            // URL-encode arguments to handle special characters
+    data object Save : Screen("save_screen/{originalLabel}/{translatedLabel}") {
+        fun createRoute(originalLabel: String, translatedLabel: String, bitmap: Bitmap? = null): String {
             val encodedOriginal = URLEncoder.encode(originalLabel, "UTF-8")
             val encodedTranslated = URLEncoder.encode(translatedLabel, "UTF-8")
             return "save_screen/$encodedOriginal/$encodedTranslated"
         }
     }
 }
+
+// Global variable to temporarily hold bitmap (not ideal but works for demo)
+var capturedBitmap: Bitmap? = null
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,12 +55,14 @@ fun LinguaLensApp() {
             startDestination = Screen.Camera.route,
             modifier = Modifier.fillMaxSize()
         ) {
-            // Camera Screen Route
             composable(Screen.Camera.route) {
                 CameraScreen(navController = navController)
             }
 
-            // Save Screen Route
+            composable(Screen.Favorites.route) {
+                FavoritesScreen(navController = navController)
+            }
+
             composable(
                 route = Screen.Save.route,
                 arguments = listOf(
@@ -73,19 +70,20 @@ fun LinguaLensApp() {
                     navArgument("translatedLabel") { type = NavType.StringType }
                 )
             ) { backStackEntry ->
-                // Decode arguments
                 val originalLabel = URLDecoder.decode(
-                    backStackEntry.arguments?.getString("originalLabel") ?: "", "UTF-8"
+                    backStackEntry.arguments?.getString("originalLabel") ?: "",
+                    "UTF-8"
                 )
                 val translatedLabel = URLDecoder.decode(
-                    backStackEntry.arguments?.getString("translatedLabel") ?: "", "UTF-8"
+                    backStackEntry.arguments?.getString("translatedLabel") ?: "",
+                    "UTF-8"
                 )
 
                 SaveScreen(
                     navController = navController,
                     originalLabel = originalLabel,
                     translatedLabel = translatedLabel,
-                    capturedBitmap = NavigationState.currentBitmap
+                    bitmap = capturedBitmap
                 )
             }
         }

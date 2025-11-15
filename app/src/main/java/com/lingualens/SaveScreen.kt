@@ -1,17 +1,10 @@
 package com.lingualens
 
-import android.content.ContentValues
-import android.content.Context
 import android.graphics.Bitmap
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,12 +15,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.lingualens.data.AppDatabase
+import com.lingualens.data.SavedTranslation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.io.OutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,11 +29,14 @@ fun SaveScreen(
     navController: NavController,
     originalLabel: String,
     translatedLabel: String,
-    capturedBitmap: Bitmap?
+    bitmap: Bitmap?
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val database = remember { AppDatabase.getDatabase(context) }
+
     var isSaving by remember { mutableStateOf(false) }
+    var saveMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -47,7 +44,7 @@ fun SaveScreen(
                 title = { Text("Save Translation") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, "Back")
                     }
                 }
             )
@@ -58,222 +55,161 @@ fun SaveScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Display captured image
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            if (bitmap != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    elevation = CardDefaults.cardElevation(4.dp)
                 ) {
-                    if (capturedBitmap != null) {
-                        Image(
-                            bitmap = capturedBitmap.asImageBitmap(),
-                            contentDescription = "Detected Object",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "No Image",
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "No image available",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Captured Image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No image captured")
                     }
                 }
             }
 
-            // Display translations
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Display labels
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Column {
-                        Text(
-                            "Original:",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Text(
-                            originalLabel,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
+                    Text(
+                        "Original:",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        originalLabel,
+                        style = MaterialTheme.typography.headlineMedium
+                    )
 
-                    Divider()
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Column {
-                        Text(
-                            "Translation:",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Text(
-                            translatedLabel,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(
+                        "Translation:",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        translatedLabel,
+                        style = MaterialTheme.typography.headlineMedium
+                    )
                 }
             }
 
-            // Action buttons
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Save message
+            saveMessage?.let { message ->
+                Text(
+                    message,
+                    color = if (message.contains("success", ignoreCase = true))
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 OutlinedButton(
                     onClick = { navController.popBackStack() },
-                    modifier = Modifier.weight(1f),
                     enabled = !isSaving
                 ) {
-                    Text("Return")
+                    Icon(Icons.Default.ArrowBack, null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Cancel")
                 }
 
                 Button(
                     onClick = {
-                        if (capturedBitmap != null) {
-                            isSaving = true
+                        if (bitmap != null) {
                             scope.launch {
-                                val success = saveImage(
-                                    context,
-                                    capturedBitmap,
-                                    originalLabel,
-                                    translatedLabel
-                                )
-                                isSaving = false
+                                isSaving = true
+                                try {
+                                    val imagePath = saveImageToInternalStorage(context, bitmap)
 
-                                if (success) {
-                                    Toast.makeText(
-                                        context,
-                                        "Image saved successfully!",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    val translation = SavedTranslation(
+                                        originalLabel = originalLabel,
+                                        translatedLabel = translatedLabel,
+                                        imagePath = imagePath
+                                    )
+
+                                    withContext(Dispatchers.IO) {
+                                        database.translationDao().insertTranslation(translation)
+                                    }
+
+                                    saveMessage = "Translation saved successfully!"
+                                    kotlinx.coroutines.delay(1000)
                                     navController.popBackStack()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "Failed to save image",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                } catch (e: Exception) {
+                                    saveMessage = "Failed to save: ${e.message}"
+                                } finally {
+                                    isSaving = false
                                 }
                             }
                         } else {
-                            Toast.makeText(
-                                context,
-                                "No image to save",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            saveMessage = "No image to save"
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isSaving && capturedBitmap != null
+                    enabled = !isSaving && bitmap != null
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(
-                            Icons.Default.Save,
-                            contentDescription = "Save",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save")
+                        Icon(Icons.Default.Save, null)
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Save")
                 }
             }
         }
     }
 }
 
-private suspend fun saveImage(
-    context: Context,
-    bitmap: Bitmap,
-    originalLabel: String,
-    translatedLabel: String
-): Boolean = withContext(Dispatchers.IO) {
-    try {
-        val filename = "LinguaLens_${System.currentTimeMillis()}.jpg"
-        val description = "Original: $originalLabel | Translation: $translatedLabel"
+private fun saveImageToInternalStorage(context: android.content.Context, bitmap: Bitmap): String {
+    val filename = "IMG_${System.currentTimeMillis()}.jpg"
+    val file = File(context.filesDir, filename)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Use MediaStore for Android 10+
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/LinguaLens")
-                put(MediaStore.Images.Media.DESCRIPTION, description)
-            }
-
-            val uri = context.contentResolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-
-            uri?.let {
-                context.contentResolver.openOutputStream(it)?.use { outputStream ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, outputStream)
-                }
-                true
-            } ?: false
-        } else {
-            // Use legacy file saving for older Android versions
-            val picturesDir = Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES
-            )
-            val linguaLensDir = File(picturesDir, "LinguaLens")
-            linguaLensDir.mkdirs()
-
-            val file = File(linguaLensDir, filename)
-            FileOutputStream(file).use { outputStream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, outputStream)
-            }
-
-            // Notify media scanner
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Images.Media.DATA, file.absolutePath)
-                put(MediaStore.Images.Media.DESCRIPTION, description)
-            }
-            context.contentResolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-
-            true
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
+    FileOutputStream(file).use { out ->
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
     }
+
+    return file.absolutePath
 }
