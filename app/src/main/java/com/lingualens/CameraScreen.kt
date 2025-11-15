@@ -67,7 +67,7 @@ fun CameraScreen(navController: NavController) {
         }
     }
 
-    var selectedLanguage by remember { mutableStateOf("English") }
+    var selectedLanguage by remember { mutableStateOf("Spanish") }
     var detections by remember { mutableStateOf<List<DetectionData>>(emptyList()) }
     var isModelLoading by remember { mutableStateOf(false) }
     var loadingMessage by remember { mutableStateOf("") }
@@ -84,23 +84,11 @@ fun CameraScreen(navController: NavController) {
                         val label = obj.labels.firstOrNull()?.text ?: "Unknown"
                         val translated = translationManager.translate(label)
 
-                        // Get the actual screen dimensions
-                        previewView?.let { view ->
-                            val scaleX = view.width.toFloat()
-                            val scaleY = view.height.toFloat()
-
-                            DetectionData(
-                                id = index,
-                                label = label,
-                                translatedLabel = translated,
-                                boundingBox = obj.boundingBox.toComposeRect(scaleX, scaleY),
-                                confidence = obj.labels.firstOrNull()?.confidence ?: 0f
-                            )
-                        } ?: DetectionData(
+                        DetectionData(
                             id = index,
                             label = label,
                             translatedLabel = translated,
-                            boundingBox = obj.boundingBox.toComposeRect(1f, 1f),
+                            boundingBox = obj.boundingBox.toComposeRect(),
                             confidence = obj.labels.firstOrNull()?.confidence ?: 0f
                         )
                     }
@@ -170,7 +158,6 @@ fun CameraScreen(navController: NavController) {
 
                                 val imageCaptureBuilder = ImageCapture.Builder()
                                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                                    .setTargetRotation(view.display.rotation)
                                 imageCapture = imageCaptureBuilder.build()
 
                                 val imageAnalysis = ImageAnalysis.Builder()
@@ -207,7 +194,6 @@ fun CameraScreen(navController: NavController) {
                                 object : ImageCapture.OnImageCapturedCallback() {
                                     override fun onCaptureSuccess(image: ImageProxy) {
                                         val bitmap = imageProxyToBitmap(image)
-                                        // Rotate bitmap based on image rotation
                                         val rotatedBitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
                                         image.close()
 
@@ -291,53 +277,25 @@ private fun DetectionOverlay(
                         width = detection.boundingBox.width.dp,
                         height = detection.boundingBox.height.dp
                     )
-                    .border(
-                        width = 3.dp,
-                        color = Color(0xFF00E5FF), // Modern cyan color
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                    )
+                    .border(3.dp, Color.Yellow)
                     .clickable { onBoxClicked(detection) }
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Color(0xFF00E5FF).copy(alpha = 0.9f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(
-                                topStart = 12.dp,
-                                topEnd = 12.dp
-                            )
-                        )
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    // Show both native and translated
-                    if (detection.label != detection.translatedLabel) {
-                        Text(
-                            text = detection.label,
-                            color = Color.Black,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = detection.translatedLabel,
-                            color = Color.Black.copy(alpha = 0.8f),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    } else {
-                        // If same (English selected), just show once
-                        Text(
-                            text = detection.label,
-                            color = Color.Black,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Text(
+                        text = detection.translatedLabel,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(
                         text = "${(detection.confidence * 100).toInt()}%",
-                        color = Color.Black.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Normal
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -351,7 +309,7 @@ private fun LanguageSelector(
     onLanguageChange: (String) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val languages = listOf("English", "Spanish", "French", "German", "Italian", "Portuguese", "Polish", "Dutch", "Japanese", "Chinese", "Korean", "Russian", "Arabic")
+    val languages = listOf("Spanish", "French", "German", "Italian", "Portuguese", "Polish")
 
     BottomAppBar {
         Row(
@@ -396,6 +354,15 @@ fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap {
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }
 
+
+@androidx.annotation.OptIn(ExperimentalGetImage::class)
+fun ImageProxy.toBitmap(): Bitmap {
+    val image = this.image ?: throw IllegalStateException("Image is null")
+    val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
+    // Convert YUV to RGB (simplified)
+    return bitmap
+}
+
 fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     if (degrees == 0f) return bitmap
 
@@ -404,9 +371,11 @@ fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
-fun android.graphics.Rect.toComposeRect(scaleX: Float = 1f, scaleY: Float = 1f): androidx.compose.ui.geometry.Rect {
+
+
+fun android.graphics.Rect.toComposeRect(): androidx.compose.ui.geometry.Rect {
     return androidx.compose.ui.geometry.Rect(
-        androidx.compose.ui.geometry.Offset(left * scaleX, top * scaleY),
-        androidx.compose.ui.geometry.Size(width() * scaleX, height() * scaleY)
+        Offset(left.toFloat(), top.toFloat()),
+        Size(width().toFloat(), height().toFloat())
     )
 }

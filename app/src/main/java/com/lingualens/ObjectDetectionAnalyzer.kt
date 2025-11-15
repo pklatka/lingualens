@@ -9,6 +9,7 @@ import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 
 class ObjectDetectionAnalyzer(
+    // MODIFIED: Simplified the callback
     private val onObjectsDetected: (List<DetectedObject>) -> Unit,
     private val onError: (Exception) -> Unit
 ) : ImageAnalysis.Analyzer {
@@ -32,6 +33,8 @@ class ObjectDetectionAnalyzer(
 
             detector.process(image)
                 .addOnSuccessListener { detectedObjects ->
+                    // MODIFIED: Just pass the objects.
+                    // The coordinate transform will be handled by the view.
                     onObjectsDetected(detectedObjects)
                 }
                 .addOnFailureListener { exception ->
