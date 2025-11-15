@@ -20,18 +20,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.google.mlkit.vision.objects.DetectedObject
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
@@ -71,9 +68,7 @@ fun CameraScreen(navController: NavController) {
     var detections by remember { mutableStateOf<List<DetectionData>>(emptyList()) }
     var isModelLoading by remember { mutableStateOf(false) }
     var loadingMessage by remember { mutableStateOf("") }
-    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
-    var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
     val translationManager = remember { TranslationManager() }
     val analyzer = remember {
@@ -146,14 +141,11 @@ fun CameraScreen(navController: NavController) {
                 AndroidView(
                     factory = { ctx ->
                         PreviewView(ctx).also { view ->
-                            previewView = view
                             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                             cameraProviderFuture.addListener({
                                 val provider = cameraProviderFuture.get()
-                                cameraProvider = provider
-
                                 val preview = Preview.Builder().build().also {
-                                    it.setSurfaceProvider(view.surfaceProvider)
+                                    it.surfaceProvider = view.surfaceProvider
                                 }
 
                                 val imageCaptureBuilder = ImageCapture.Builder()
@@ -189,29 +181,27 @@ fun CameraScreen(navController: NavController) {
                 DetectionOverlay(
                     detections = detections,
                     onBoxClicked = { detection ->
-                        imageCapture?.let { capture ->
-                            capture.takePicture(
-                                ContextCompat.getMainExecutor(context),
-                                object : ImageCapture.OnImageCapturedCallback() {
-                                    override fun onCaptureSuccess(image: ImageProxy) {
-                                        val bitmap = imageProxyToBitmap(image)
-                                        // Rotate bitmap based on image rotation
-                                        val rotatedBitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
-                                        image.close()
+                        imageCapture?.takePicture(
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    val bitmap = imageProxyToBitmap(image)
+                                    // Rotate bitmap based on image rotation
+                                    val rotatedBitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
+                                    image.close()
 
-                                        // Store bitmap globally (not ideal but simplest for now)
-                                        capturedBitmap = rotatedBitmap
+                                    // Store bitmap globally (not ideal but simplest for now)
+                                    capturedBitmap = rotatedBitmap
 
-                                        navController.navigate(
-                                            Screen.Save.createRoute(
-                                                detection.label,
-                                                detection.translatedLabel
-                                            )
+                                    navController.navigate(
+                                        Screen.Save.createRoute(
+                                            detection.label,
+                                            detection.translatedLabel
                                         )
-                                    }
+                                    )
                                 }
-                            )
-                        }
+                            }
+                        )
                     }
                 )
 
@@ -281,7 +271,7 @@ private fun DetectionOverlay(
                     )
                     .border(
                         width = 3.dp,
-                        color = Color(0xFF00E5FF), // Modern cyan color
+                        color = Color(0xFF00E5FF),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                     )
                     .clickable { onBoxClicked(detection) }

@@ -30,7 +30,6 @@ sealed class Screen(val route: String) {
     }
 }
 
-// Global variable to temporarily hold bitmap (not ideal but works for demo)
 var capturedBitmap: Bitmap? = null
 
 class MainActivity : ComponentActivity() {

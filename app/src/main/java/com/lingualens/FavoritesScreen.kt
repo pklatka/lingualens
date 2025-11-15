@@ -6,37 +6,68 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.toColorInt
 import androidx.navigation.NavController
-import com.lingualens.data.AppDatabase
-import com.lingualens.data.SavedTranslation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.OutputStream
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -280,12 +311,8 @@ private suspend fun exportImageWithTranslation(context: Context, translation: Sa
                 ?: throw Exception("Failed to load image")
 
             // Create a new bitmap with extra space at the bottom for text
-            val textHeight = 150 // Height for the text section
-            val newBitmap = Bitmap.createBitmap(
-                originalBitmap.width,
-                originalBitmap.height + textHeight,
-                Bitmap.Config.ARGB_8888
-            )
+            val textHeight = 300 // Height for the text section
+            val newBitmap = createBitmap(originalBitmap.width, originalBitmap.height + textHeight)
 
             val canvas = Canvas(newBitmap)
 
@@ -294,7 +321,7 @@ private suspend fun exportImageWithTranslation(context: Context, translation: Sa
 
             // Draw background for text
             val backgroundPaint = Paint().apply {
-                color = android.graphics.Color.parseColor("#00E5FF")
+                color = "#00E5FF".toColorInt()
                 style = Paint.Style.FILL
             }
             canvas.drawRect(
@@ -349,7 +376,7 @@ private suspend fun exportImageWithTranslation(context: Context, translation: Sa
             )
 
             // Save to gallery
-            saveImageToGallery(context, newBitmap, translation)
+            saveImageToGallery(context, newBitmap)
 
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "Image saved to gallery!", Toast.LENGTH_SHORT).show()
@@ -362,7 +389,7 @@ private suspend fun exportImageWithTranslation(context: Context, translation: Sa
     }
 }
 
-private fun saveImageToGallery(context: Context, bitmap: Bitmap, translation: SavedTranslation) {
+private fun saveImageToGallery(context: Context, bitmap: Bitmap) {
     val filename = "LinguaLens_${System.currentTimeMillis()}.jpg"
 
     val contentValues = ContentValues().apply {

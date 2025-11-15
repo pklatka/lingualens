@@ -18,7 +18,7 @@ class TranslationManager {
     ): Boolean {
         return try {
             // If English is selected, no translation needed
-            if (languageCode == "en") {
+            if (languageCode == TranslateLanguage.ENGLISH) {
                 isEnglishSelected = true
                 currentTranslator?.close()
                 currentTranslator = null
@@ -73,7 +73,7 @@ class TranslationManager {
     companion object {
         fun getLanguageCode(languageName: String): String {
             return when (languageName) {
-                "English" -> "en"
+                "English" -> TranslateLanguage.ENGLISH
                 "Spanish" -> TranslateLanguage.SPANISH
                 "French" -> TranslateLanguage.FRENCH
                 "German" -> TranslateLanguage.GERMAN
