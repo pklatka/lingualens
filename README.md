@@ -9,13 +9,13 @@ It's a fun, interactive way to build your vocabulary by associating words with t
 
 ## ✨ Features
 
-  * **Real-Time Object Detection:** Uses an on-device **ML Kit** model to find and identify objects in the live camera feed.
-  * **Instant Translation:** Translates the detected object's name into one of several target languages, also using an on-device ML Kit model.
-  * **Interactive Overlays:** Displays bounding boxes and dual-language labels (native + translated) directly on the camera view.
-  * **Language Selector:** Easily switch your target translation language from a dropdown menu.
-  * **Save for Later:** Tap on a detected object to capture the image and translation.
-  * **Favorites Gallery:** A dedicated screen to browse all your saved image-translations, persisted locally using a **Room** database.
-
+- **Real-Time Object Detection:** Uses an on-device **ML Kit** model to find and identify objects in the live camera feed.
+- **Instant Translation:** Translates the detected object's name into one of several target languages, also using an on-device ML Kit model.
+- **Interactive Overlays:** Displays bounding boxes and dual-language labels (native + translated) directly on the camera view.
+- **Language Selector:** Easily switch your target translation language from a dropdown menu.
+- **Save for Later:** Tap on a detected object to capture the image and translation.
+- **Favorites Gallery:** A dedicated screen to browse all your saved image-translations, persisted locally using a **Room** database.
+  
 ## 🛠️ Tech Stack & Architecture
 
 This project is a modern Android application built entirely in **Kotlin** and leverages the latest Jetpack libraries.
