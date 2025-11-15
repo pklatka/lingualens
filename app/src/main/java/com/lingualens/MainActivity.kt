@@ -1,5 +1,6 @@
 package com.lingualens
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,10 +18,18 @@ import com.lingualens.ui.theme.LinguaLensTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
 
+// Shared state to pass Bitmap between screens (since Bitmap can't be serialized in navigation)
+object NavigationState {
+    var currentBitmap: Bitmap? = null
+}
+
 sealed class Screen(val route: String) {
     data object Camera : Screen("camera")
     data object Save : Screen("save_screen/{originalLabel}/{translatedLabel}") {
-        fun createRoute(originalLabel: String, translatedLabel: String): String {
+        fun createRoute(originalLabel: String, translatedLabel: String, bitmap: Bitmap?): String {
+            // Store bitmap in shared state
+            NavigationState.currentBitmap = bitmap
+
             // URL-encode arguments to handle special characters
             val encodedOriginal = URLEncoder.encode(originalLabel, "UTF-8")
             val encodedTranslated = URLEncoder.encode(translatedLabel, "UTF-8")
@@ -75,7 +84,8 @@ fun LinguaLensApp() {
                 SaveScreen(
                     navController = navController,
                     originalLabel = originalLabel,
-                    translatedLabel = translatedLabel
+                    translatedLabel = translatedLabel,
+                    capturedBitmap = NavigationState.currentBitmap
                 )
             }
         }

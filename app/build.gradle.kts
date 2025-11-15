@@ -6,9 +6,7 @@ plugins {
 
 android {
     namespace = "com.lingualens"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.lingualens"
@@ -59,7 +57,7 @@ dependencies {
     implementation(libs.androidx.camera.compose)
     implementation(libs.mlkit.objectDetection)
     implementation(libs.mlkit.translation)
-    implementation(libs.play.services.tflite.gpu) // For GPU acceleration
+    implementation(libs.play.services.tflite.gpu)
     implementation(libs.androidx.compose.material.icons)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

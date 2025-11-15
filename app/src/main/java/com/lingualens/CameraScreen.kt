@@ -2,68 +2,77 @@ package com.lingualens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.DetectedObject
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import kotlin.math.max
 
-// TODO: Replace this with your actual ML Kit translation logic
-private fun translateText(text: String, targetLanguage: String): String {
-    return when (targetLanguage) {
-        "Spanish" -> "$text (Spanish)"
-        "French" -> "$text (French)"
-        "German" -> "$text (German)"
-        else -> text
-    }
-}
-
-// TODO: Replace this with your real DetectedObject from ML Kit
-data class SimulatedDetection(
+data class DetectionResult(
     val id: Int,
     val label: String,
-    val boundingBox: Rect // Use Compose Rect
+    val translatedLabel: String,
+    val boundingBox: Rect,
+    val bitmap: Bitmap?
+)
+
+// Language mapping
+data class LanguageOption(val displayName: String, val mlkitCode: String)
+
+val availableLanguages = listOf(
+    LanguageOption("Spanish", TranslateLanguage.SPANISH),
+    LanguageOption("French", TranslateLanguage.FRENCH),
+    LanguageOption("German", TranslateLanguage.GERMAN),
+    LanguageOption("Italian", TranslateLanguage.ITALIAN),
+    LanguageOption("Polish", TranslateLanguage.POLISH),
+    LanguageOption("Portuguese", TranslateLanguage.PORTUGUESE),
+    LanguageOption("Chinese", TranslateLanguage.CHINESE),
+    LanguageOption("Japanese", TranslateLanguage.JAPANESE),
+    LanguageOption("Korean", TranslateLanguage.KOREAN)
 )
 
 @Composable
 fun CameraScreen(navController: NavController) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -86,13 +95,68 @@ fun CameraScreen(navController: NavController) {
         }
     }
 
-    var selectedLanguage by remember { mutableStateOf("Spanish") }
+    var selectedLanguage by remember { mutableStateOf(availableLanguages[0]) }
+    var detections by remember { mutableStateOf<List<DetectionResult>>(emptyList()) }
+    var isTranslatorReady by remember { mutableStateOf(false) }
+    var previewView: PreviewView? by remember { mutableStateOf(null) }
+    var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
+
+    // Object detector
+    val objectDetector = remember {
+        val options = ObjectDetectorOptions.Builder()
+            .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+            .enableMultipleObjects()
+            .enableClassification()
+            .build()
+        ObjectDetection.getClient(options)
+    }
+
+    // Translator
+    var translator by remember { mutableStateOf<Translator?>(null) }
+
+    // Download and prepare translator when language changes
+    LaunchedEffect(selectedLanguage) {
+        isTranslatorReady = false
+        translator?.close()
+
+        val options = TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(selectedLanguage.mlkitCode)
+            .build()
+
+        val newTranslator = Translation.getClient(options)
+        translator = newTranslator
+
+        val conditions = DownloadConditions.Builder()
+            .requireWifi()
+            .build()
+
+        newTranslator.downloadModelIfNeeded(conditions)
+            .addOnSuccessListener {
+                isTranslatorReady = true
+                Log.d("Translation", "Model downloaded for ${selectedLanguage.displayName}")
+            }
+            .addOnFailureListener { exception ->
+                Log.e("Translation", "Model download failed", exception)
+            }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            objectDetector.close()
+            translator?.close()
+        }
+    }
 
     Scaffold(
         bottomBar = {
             LanguageSelector(
-                selectedLanguage = selectedLanguage,
-                onLanguageChange = { selectedLanguage = it }
+                selectedLanguage = selectedLanguage.displayName,
+                availableLanguages = availableLanguages.map { it.displayName },
+                onLanguageChange = { languageName ->
+                    selectedLanguage = availableLanguages.first { it.displayName == languageName }
+                },
+                isTranslatorReady = isTranslatorReady
             )
         }
     ) { paddingValues ->
@@ -102,46 +166,32 @@ fun CameraScreen(navController: NavController) {
                 .padding(paddingValues)
         ) {
             if (hasCameraPermission) {
-                // TODO: 1. Replace this Box with your CameraX Preview
-                // Use androidx.camera.compose.PreviewView
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Gray),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Camera Feed Would Be Here", color = Color.White)
-                }
-
-                // TODO: 2. This is simulated data.
-                // Replace this with the live output from your ML Kit ObjectDetector
-                val simulatedDetections = listOf(
-                    SimulatedDetection(
-                        id = 1,
-                        label = "Laptop",
-                        boundingBox = Rect(
-                            Offset(100f, 300f),
-                            Size(400f, 250f)
-                        )
-                    ),
-                    SimulatedDetection(
-                        id = 2,
-                        label = "Mug",
-                        boundingBox = Rect(
-                            Offset(50f, 600f),
-                            Size(200f, 150f)
-                        )
-                    )
+                CameraPreview(
+                    modifier = Modifier.fillMaxSize(),
+                    onPreviewViewCreated = { view ->
+                        previewView = view
+                    },
+                    onImageCaptureCreated = { capture ->
+                        imageCapture = capture
+                    },
+                    lifecycleOwner = lifecycleOwner,
+                    objectDetector = objectDetector,
+                    translator = translator,
+                    isTranslatorReady = isTranslatorReady,
+                    onDetectionsUpdate = { newDetections ->
+                        detections = newDetections
+                    }
                 )
 
-                // TODO: 3. This Canvas will draw overlays
-                // Pass the real-time detection list here
                 DetectionOverlay(
-                    detections = simulatedDetections,
-                    targetLanguage = selectedLanguage,
-                    onBoxClicked = { original, translated ->
+                    detections = detections,
+                    onBoxClicked = { detection ->
                         navController.navigate(
-                            Screen.Save.createRoute(original, translated)
+                            Screen.Save.createRoute(
+                                detection.label,
+                                detection.translatedLabel,
+                                detection.bitmap
+                            )
                         )
                     }
                 )
@@ -152,7 +202,10 @@ fun CameraScreen(navController: NavController) {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Camera permission is required.")
-                        Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = {
+                            permissionLauncher.launch(Manifest.permission.CAMERA)
+                        }) {
                             Text("Grant Permission")
                         }
                     }
@@ -163,16 +216,227 @@ fun CameraScreen(navController: NavController) {
 }
 
 @Composable
+private fun CameraPreview(
+    modifier: Modifier = Modifier,
+    onPreviewViewCreated: (PreviewView) -> Unit,
+    onImageCaptureCreated: (ImageCapture) -> Unit,
+    lifecycleOwner: LifecycleOwner,
+    objectDetector: ObjectDetector,
+    translator: Translator?,
+    isTranslatorReady: Boolean,
+    onDetectionsUpdate: (List<DetectionResult>) -> Unit
+) {
+    val context = LocalContext.current
+    val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            cameraExecutor.shutdown()
+        }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            val previewView = PreviewView(ctx)
+            onPreviewViewCreated(previewView)
+
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+            cameraProviderFuture.addListener({
+                val cameraProvider = cameraProviderFuture.get()
+
+                val preview = Preview.Builder()
+                    .build()
+                    .also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+
+                val imageCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+                onImageCaptureCreated(imageCapture)
+
+                val imageAnalysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+
+                imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                    processImageProxy(
+                        imageProxy,
+                        objectDetector,
+                        translator,
+                        isTranslatorReady,
+                        onDetectionsUpdate
+                    )
+                }
+
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                try {
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        preview,
+                        imageCapture,
+                        imageAnalysis
+                    )
+                } catch (e: Exception) {
+                    Log.e("CameraPreview", "Use case binding failed", e)
+                }
+            }, ContextCompat.getMainExecutor(ctx))
+
+            previewView
+        },
+        modifier = modifier
+    )
+}
+
+@androidx.camera.core.ExperimentalGetImage
+private fun processImageProxy(
+    imageProxy: ImageProxy,
+    objectDetector: ObjectDetector,
+    translator: Translator?,
+    isTranslatorReady: Boolean,
+    onDetectionsUpdate: (List<DetectionResult>) -> Unit
+) {
+    val mediaImage = imageProxy.image
+    if (mediaImage != null) {
+        val image = InputImage.fromMediaImage(
+            mediaImage,
+            imageProxy.imageInfo.rotationDegrees
+        )
+
+        objectDetector.process(image)
+            .addOnSuccessListener { detectedObjects ->
+                if (detectedObjects.isNotEmpty() && isTranslatorReady && translator != null) {
+                    processDetections(
+                        detectedObjects,
+                        imageProxy,
+                        translator,
+                        onDetectionsUpdate
+                    )
+                } else {
+                    onDetectionsUpdate(emptyList())
+                    imageProxy.close()
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("ObjectDetection", "Detection failed", e)
+                onDetectionsUpdate(emptyList())
+                imageProxy.close()
+            }
+    } else {
+        imageProxy.close()
+    }
+}
+
+@androidx.camera.core.ExperimentalGetImage
+private fun processDetections(
+    detectedObjects: List<DetectedObject>,
+    imageProxy: ImageProxy,
+    translator: Translator,
+    onDetectionsUpdate: (List<DetectionResult>) -> Unit
+) {
+    val results = mutableListOf<DetectionResult>()
+    var processedCount = 0
+
+    // Convert ImageProxy to Bitmap for cropping
+    val bitmap = imageProxy.toBitmap()
+    val rotatedBitmap = rotateBitmap(bitmap, imageProxy.imageInfo.rotationDegrees)
+
+    detectedObjects.forEachIndexed { index, obj ->
+        val label = obj.labels.firstOrNull()?.text ?: "Object"
+
+        // Get bounding box and scale it to screen coordinates
+        val box = obj.boundingBox
+        val scaledRect = Rect(
+            left = box.left.toFloat(),
+            top = box.top.toFloat(),
+            right = box.right.toFloat(),
+            bottom = box.bottom.toFloat()
+        )
+
+        // Crop the detected object from the image
+        val croppedBitmap = cropBitmap(rotatedBitmap, box)
+
+        translator.translate(label)
+            .addOnSuccessListener { translatedText ->
+                results.add(
+                    DetectionResult(
+                        id = index,
+                        label = label,
+                        translatedLabel = translatedText,
+                        boundingBox = scaledRect,
+                        bitmap = croppedBitmap
+                    )
+                )
+                processedCount++
+
+                if (processedCount == detectedObjects.size) {
+                    onDetectionsUpdate(results)
+                    imageProxy.close()
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("Translation", "Translation failed for: $label", e)
+                results.add(
+                    DetectionResult(
+                        id = index,
+                        label = label,
+                        translatedLabel = label,
+                        boundingBox = scaledRect,
+                        bitmap = croppedBitmap
+                    )
+                )
+                processedCount++
+
+                if (processedCount == detectedObjects.size) {
+                    onDetectionsUpdate(results)
+                    imageProxy.close()
+                }
+            }
+    }
+
+    if (detectedObjects.isEmpty()) {
+        imageProxy.close()
+    }
+}
+
+private fun ImageProxy.toBitmap(): Bitmap {
+    val buffer = planes[0].buffer
+    val bytes = ByteArray(buffer.remaining())
+    buffer.get(bytes)
+    return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+}
+
+private fun rotateBitmap(bitmap: Bitmap, rotationDegrees: Int): Bitmap {
+    if (rotationDegrees == 0) return bitmap
+
+    val matrix = Matrix()
+    matrix.postRotate(rotationDegrees.toFloat())
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+}
+
+private fun cropBitmap(bitmap: Bitmap, box: android.graphics.Rect): Bitmap {
+    val left = max(0, box.left)
+    val top = max(0, box.top)
+    val width = kotlin.math.min(box.width(), bitmap.width - left)
+    val height = kotlin.math.min(box.height(), bitmap.height - top)
+
+    return if (width > 0 && height > 0) {
+        Bitmap.createBitmap(bitmap, left, top, width, height)
+    } else {
+        bitmap
+    }
+}
+
+@Composable
 private fun DetectionOverlay(
-    detections: List<SimulatedDetection>,
-    targetLanguage: String,
-    onBoxClicked: (originalLabel: String, translatedLabel: String) -> Unit
+    detections: List<DetectionResult>,
+    onBoxClicked: (DetectionResult) -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         detections.forEach { detection ->
-            val translatedLabel = translateText(detection.label, targetLanguage)
-
-            // A Box for each detection, containing the border and the label
             Column(
                 modifier = Modifier
                     .offset(
@@ -180,38 +444,46 @@ private fun DetectionOverlay(
                         y = detection.boundingBox.top.dp
                     )
                     .size(
-                        width = detection.boundingBox.size.width.dp,
-                        height = detection.boundingBox.size.height.dp
+                        width = detection.boundingBox.width.dp,
+                        height = detection.boundingBox.height.dp
                     )
-                    .border(2.dp, Color.Yellow) // Draw the border
+                    .border(3.dp, Color.Yellow)
                     .clickable {
-                        onBoxClicked(detection.label, translatedLabel)
+                        onBoxClicked(detection)
                     }
             ) {
-                // Label with a semi-transparent background at the top of the box
-                Text(
-                    text = translatedLabel,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = detection.label,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                    Text(
+                        text = detection.translatedLabel,
+                        color = Color.Yellow,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
 }
 
-
 @Composable
 private fun LanguageSelector(
     selectedLanguage: String,
-    onLanguageChange: (String) -> Unit
+    availableLanguages: List<String>,
+    onLanguageChange: (String) -> Unit,
+    isTranslatorReady: Boolean
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val languages = listOf("Spanish", "French", "German")
 
     BottomAppBar(
         modifier = Modifier.fillMaxWidth()
@@ -225,13 +497,23 @@ private fun LanguageSelector(
             Text("Translate to:", modifier = Modifier.padding(end = 8.dp))
             Box {
                 Button(onClick = { showMenu = true }) {
-                    Text(selectedLanguage)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(selectedLanguage)
+                        if (!isTranslatorReady) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
                 }
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
-                    languages.forEach { lang ->
+                    availableLanguages.forEach { lang ->
                         DropdownMenuItem(
                             text = { Text(lang) },
                             onClick = {
