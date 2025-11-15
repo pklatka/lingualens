@@ -67,7 +67,7 @@ fun CameraScreen(navController: NavController) {
         }
     }
 
-    var selectedLanguage by remember { mutableStateOf("Spanish") }
+    var selectedLanguage by remember { mutableStateOf("English") }
     var detections by remember { mutableStateOf<List<DetectionData>>(emptyList()) }
     var isModelLoading by remember { mutableStateOf(false) }
     var loadingMessage by remember { mutableStateOf("") }
@@ -158,6 +158,7 @@ fun CameraScreen(navController: NavController) {
 
                                 val imageCaptureBuilder = ImageCapture.Builder()
                                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                                    .setTargetRotation(view.display.rotation)
                                 imageCapture = imageCaptureBuilder.build()
 
                                 val imageAnalysis = ImageAnalysis.Builder()
@@ -194,6 +195,7 @@ fun CameraScreen(navController: NavController) {
                                 object : ImageCapture.OnImageCapturedCallback() {
                                     override fun onCaptureSuccess(image: ImageProxy) {
                                         val bitmap = imageProxyToBitmap(image)
+                                        // Rotate bitmap based on image rotation
                                         val rotatedBitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees.toFloat())
                                         image.close()
 
@@ -277,25 +279,53 @@ private fun DetectionOverlay(
                         width = detection.boundingBox.width.dp,
                         height = detection.boundingBox.height.dp
                     )
-                    .border(3.dp, Color.Yellow)
+                    .border(
+                        width = 3.dp,
+                        color = Color(0xFF00E5FF), // Modern cyan color
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                    )
                     .clickable { onBoxClicked(detection) }
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .background(
+                            Color(0xFF00E5FF).copy(alpha = 0.9f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                                topStart = 12.dp,
+                                topEnd = 12.dp
+                            )
+                        )
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text(
-                        text = detection.translatedLabel,
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    // Show both native and translated
+                    if (detection.label != detection.translatedLabel) {
+                        Text(
+                            text = detection.label,
+                            color = Color.Black,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = detection.translatedLabel,
+                            color = Color.Black.copy(alpha = 0.8f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        // If same (English selected), just show once
+                        Text(
+                            text = detection.label,
+                            color = Color.Black,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                     Text(
                         text = "${(detection.confidence * 100).toInt()}%",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp
+                        color = Color.Black.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Normal
                     )
                 }
             }
@@ -309,7 +339,7 @@ private fun LanguageSelector(
     onLanguageChange: (String) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val languages = listOf("Spanish", "French", "German", "Italian", "Portuguese", "Polish")
+    val languages = listOf("English", "Spanish", "French", "German", "Italian", "Portuguese", "Polish", "Dutch", "Japanese", "Chinese", "Korean", "Russian", "Arabic")
 
     BottomAppBar {
         Row(
@@ -354,15 +384,6 @@ fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap {
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }
 
-
-@androidx.annotation.OptIn(ExperimentalGetImage::class)
-fun ImageProxy.toBitmap(): Bitmap {
-    val image = this.image ?: throw IllegalStateException("Image is null")
-    val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
-    // Convert YUV to RGB (simplified)
-    return bitmap
-}
-
 fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     if (degrees == 0f) return bitmap
 
@@ -371,11 +392,9 @@ fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
-
-
-fun android.graphics.Rect.toComposeRect(): androidx.compose.ui.geometry.Rect {
+fun android.graphics.Rect.toComposeRect(scaleX: Float = 1f, scaleY: Float = 1f): androidx.compose.ui.geometry.Rect {
     return androidx.compose.ui.geometry.Rect(
-        Offset(left.toFloat(), top.toFloat()),
-        Size(width().toFloat(), height().toFloat())
+        androidx.compose.ui.geometry.Offset(left * scaleX, top * scaleY),
+        androidx.compose.ui.geometry.Size(width() * scaleX, height() * scaleY)
     )
 }
