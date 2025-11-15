@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.lingualens.ui.theme.Black
+import com.lingualens.ui.theme.BrandCyan
 import com.lingualens.utils.ObjectDetectionAnalyzer
 import com.lingualens.utils.TranslationManager
 import kotlinx.coroutines.launch
@@ -273,7 +275,7 @@ private fun DetectionOverlay(
                     )
                     .border(
                         width = 3.dp,
-                        color = Color(0xFF00E5FF),
+                        color = BrandCyan,
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                     )
                     .clickable { onBoxClicked(detection) }
@@ -282,7 +284,7 @@ private fun DetectionOverlay(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            Color(0xFF00E5FF).copy(alpha = 0.9f),
+                            BrandCyan.copy(alpha = 0.9f),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(
                                 topStart = 12.dp,
                                 topEnd = 12.dp
@@ -294,13 +296,13 @@ private fun DetectionOverlay(
                     if (detection.label != detection.translatedLabel) {
                         Text(
                             text = detection.label,
-                            color = Color.Black,
+                            color = Black,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = detection.translatedLabel,
-                            color = Color.Black.copy(alpha = 0.8f),
+                            color = Black.copy(alpha = 0.8f),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -308,14 +310,14 @@ private fun DetectionOverlay(
                         // If same (English selected), just show once
                         Text(
                             text = detection.label,
-                            color = Color.Black,
+                            color = Black,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                     Text(
                         text = "${(detection.confidence * 100).toInt()}%",
-                        color = Color.Black.copy(alpha = 0.7f),
+                        color = Black.copy(alpha = 0.7f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Normal
                     )
