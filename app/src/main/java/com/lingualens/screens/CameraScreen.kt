@@ -31,12 +31,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.lingualens.Screen
 import com.lingualens.ui.theme.Black
 import com.lingualens.ui.theme.BrandCyan
 import com.lingualens.utils.ObjectDetectionAnalyzer
 import com.lingualens.utils.TranslationManager
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+import com.lingualens.R
 
 data class DetectionData(
     val id: Int,
@@ -111,7 +113,7 @@ fun CameraScreen(navController: NavController) {
 
     LaunchedEffect(selectedLanguage) {
         isModelLoading = true
-        val languageCode = TranslationManager.Companion.getLanguageCode(selectedLanguage)
+        val languageCode = TranslationManager.getLanguageCode(selectedLanguage)
         translationManager.downloadModel(languageCode) { message ->
             loadingMessage = message
         }
@@ -123,14 +125,14 @@ fun CameraScreen(navController: NavController) {
             TopAppBar(
                 title = {
                     Image(
-                        painter = painterResource(id = com.lingualens.R.drawable.lingualens_logo_no_bg),
+                        painter = painterResource(id = R.drawable.lingualens_logo_no_bg),
                         contentDescription = "LinguaLens Logo",
                         modifier = Modifier.height(35.dp)
                     )
                 },
                 actions = {
                     IconButton(onClick = {
-                        navController.navigate(com.lingualens.Screen.Favorites.route)
+                        navController.navigate(Screen.Favorites.route)
                     }) {
                         Icon(Icons.Default.Favorite, "Favorites")
                     }
@@ -214,7 +216,7 @@ fun CameraScreen(navController: NavController) {
                                     _root_ide_package_.com.lingualens.capturedBitmap = rotatedBitmap
 
                                     navController.navigate(
-                                        _root_ide_package_.com.lingualens.Screen.Save.createRoute(
+                                        Screen.Save.createRoute(
                                             detection.label,
                                             detection.translatedLabel
                                         )
