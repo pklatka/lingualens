@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
@@ -31,10 +32,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.lingualens.Screen
 import com.lingualens.ui.theme.Black
 import com.lingualens.ui.theme.BrandCyan
-import com.lingualens.utils.ObjectDetectionAnalyzer
+// import com.lingualens.utils.ObjectDetectionAnalyzer // <-- Removed
+import com.lingualens.utils.ObjectDetectorHelper // <-- Added
 import com.lingualens.utils.TranslationManager
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
@@ -79,34 +82,62 @@ fun CameraScreen(navController: NavController) {
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
     val translationManager = remember { TranslationManager() }
-    val analyzer = remember {
-        ObjectDetectionAnalyzer(
-            onObjectsDetected = { objects ->
-                scope.launch {
-                    val newDetections = objects.mapIndexed { index, obj ->
-                        val label = obj.labels.firstOrNull()?.text ?: "Unknown"
-                        val translated = translationManager.translate(label)
 
-                        DetectionData(
-                            id = index,
-                            label = label,
-                            translatedLabel = translated,
-                            boundingBox = obj.boundingBox.toComposeRect(),
-                            confidence = obj.labels.firstOrNull()?.confidence ?: 0f
-                        )
-                    }
-                    detections = newDetections
+    // <-- Replaced ObjectDetectionAnalyzer with ObjectDetectorHelper -->
+    val objectDetectorHelper = remember {
+        ObjectDetectorHelper(
+            context = context,
+            runningMode = RunningMode.LIVE_STREAM,
+            objectDetectorListener = object : ObjectDetectorHelper.DetectorListener {
+                override fun onError(error: String, errorCode: Int) {
+                    Log.e("CameraScreen", "Detector Error: $error")
                 }
-            },
-            onError = { e ->
-                println("Detection error: ${e.message}")
+
+                override fun onResults(resultBundle: ObjectDetectorHelper.ResultBundle) {
+                    val mediaPipeDetections =
+                        resultBundle.results.firstOrNull()?.detections() ?: emptyList()
+
+                    // Map MediaPipe results to DetectionData.
+                    // This now happens in a coroutine scope.
+                    scope.launch {
+                        val newDetections = mediaPipeDetections.mapIndexed { index, detection ->
+                            val label = detection.categories().firstOrNull()?.categoryName() ?: "Unknown"
+                            val confidence = detection.categories().firstOrNull()?.score() ?: 0f
+                            val boundingBox = detection.boundingBox() // This is a RectF
+
+                            // Note: This bounding box is in the coordinates of the *input image*.
+                            // The original code did not scale this, so we will follow that
+                            // pattern. For a more robust implementation, this would be scaled
+                            // to the View's dimensions.
+                            val composeRect = androidx.compose.ui.geometry.Rect(
+                                left = boundingBox.left,
+                                top = boundingBox.top,
+                                right = boundingBox.right,
+                                bottom = boundingBox.bottom
+                            )
+
+                            val translated = translationManager.translate(label)
+
+                            DetectionData(
+                                id = index,
+                                label = label,
+                                translatedLabel = translated,
+                                boundingBox = composeRect,
+                                confidence = confidence
+                            )
+                        }
+                        // Update the state with new detections
+                        detections = newDetections
+                    }
+                }
             }
         )
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            analyzer.close()
+            // analyzer.close() // <-- Removed
+            objectDetectorHelper.clearObjectDetector() // <-- Added
             translationManager.close()
         }
     }
@@ -167,14 +198,19 @@ fun CameraScreen(navController: NavController) {
                                     .setTargetRotation(view.display.rotation)
                                 imageCapture = imageCaptureBuilder.build()
 
+                                // <-- Updated ImageAnalysis to use the new helper -->
                                 val imageAnalysis = ImageAnalysis.Builder()
                                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                    .setTargetRotation(view.display.rotation)
                                     .build()
                                     .also {
                                         it.setAnalyzer(
                                             Executors.newSingleThreadExecutor(),
-                                            analyzer
-                                        )
+                                        ) { imageProxy ->
+                                            // Pass the frame to the helper.
+                                            // The helper is responsible for closing the ImageProxy.
+                                            objectDetectorHelper.detectLivestreamFrame(imageProxy)
+                                        }
                                     }
 
                                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA

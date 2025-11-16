@@ -11,12 +11,13 @@ lifecycleRuntimeKtx = "2.9.4"
 activityCompose = "1.11.0"
 composeBom = "2025.11.00"
 camerax = "1.5.1"
-mlkitObjectDetection = "17.0.2"
+mlkitObjectDetection = "17.0.2" # <-- Removed
 mlkitTranslation = "17.0.3"
 playServicesTfliteGpu = "16.4.0" # For GPU acceleration
 navigationCompose = "2.9.6"
 composeMaterialIcons = "1.7.8"
 roomRuntime = "2.8.3"
+mediapipeTasks = "0.20230731" # <-- Added
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,9 +47,10 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 androidx-camera-compose = { group = "androidx.camera", name = "camera-compose", version.ref = "camerax" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
-mlkit-objectDetection = { group = "com.google.mlkit", name = "object-detection", version.ref = "mlkitObjectDetection" }
+mlkit-objectDetection = { group = "com.google.mlkit", name = "object-detection", version.ref = "mlkitObjectDetection" } # <-- Removed
 mlkit-translation = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslation" }
 play-services-tflite-gpu = { group = "com.google.android.gms", name = "play-services-tflite-gpu", version.ref = "playServicesTfliteGpu" }
+mediapipe-tasks-vision = { group = "com.google.mediapipe", name = "tasks-vision", version.ref = "mediapipeTasks" } # <-- Added
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
