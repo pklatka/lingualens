@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.graphics.RectF
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,22 +33,27 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.lingualens.utils.ObjectDetectorHelper
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.lingualens.Screen
 import com.lingualens.ui.theme.Black
 import com.lingualens.ui.theme.BrandCyan
-// import com.lingualens.utils.ObjectDetectionAnalyzer // <-- Removed
-import com.lingualens.utils.ObjectDetectorHelper // <-- Added
 import com.lingualens.utils.TranslationManager
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import com.lingualens.R
+import kotlin.math.max
 
+/**
+ * Stores data for a single detected object, including the
+ * original bounding box from MediaPipe.
+ */
 data class DetectionData(
     val id: Int,
     val label: String,
     val translatedLabel: String,
-    val boundingBox: androidx.compose.ui.geometry.Rect,
+    // Use android.graphics.RectF to store the raw coordinates from MediaPipe
+    val boundingBox: RectF,
     val confidence: Float
 )
 
@@ -81,39 +87,41 @@ fun CameraScreen(navController: NavController) {
     var loadingMessage by remember { mutableStateOf("") }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
+    // State variables to store image dimensions for coordinate scaling
+    var inputImageHeight by remember { mutableIntStateOf(1) }
+    var inputImageWidth by remember { mutableIntStateOf(1) }
+    var inputImageRotation by remember { mutableIntStateOf(0) }
+
     val translationManager = remember { TranslationManager() }
 
-    // <-- Replaced ObjectDetectionAnalyzer with ObjectDetectorHelper -->
     val objectDetectorHelper = remember {
         ObjectDetectorHelper(
             context = context,
-            runningMode = RunningMode.LIVE_STREAM,
             objectDetectorListener = object : ObjectDetectorHelper.DetectorListener {
                 override fun onError(error: String, errorCode: Int) {
                     Log.e("CameraScreen", "Detector Error: $error")
                 }
 
                 override fun onResults(resultBundle: ObjectDetectorHelper.ResultBundle) {
+                    // Get the detection results
                     val mediaPipeDetections =
                         resultBundle.results.firstOrNull()?.detections() ?: emptyList()
+                    inputImageHeight = resultBundle.inputImageHeight
+                    inputImageWidth = resultBundle.inputImageWidth
+                    inputImageRotation = resultBundle.inputImageRotation
 
-                    // Map MediaPipe results to DetectionData.
-                    // This now happens in a coroutine scope.
+                    // Process results in a coroutine
                     scope.launch {
                         val newDetections = mediaPipeDetections.mapIndexed { index, detection ->
-                            val label = detection.categories().firstOrNull()?.categoryName() ?: "Unknown"
+                            val label =
+                                detection.categories().firstOrNull()?.categoryName() ?: "Unknown"
                             val confidence = detection.categories().firstOrNull()?.score() ?: 0f
-                            val boundingBox = detection.boundingBox() // This is a RectF
-
-                            // Note: This bounding box is in the coordinates of the *input image*.
-                            // The original code did not scale this, so we will follow that
-                            // pattern. For a more robust implementation, this would be scaled
-                            // to the View's dimensions.
-                            val composeRect = androidx.compose.ui.geometry.Rect(
-                                left = boundingBox.left,
-                                top = boundingBox.top,
-                                right = boundingBox.right,
-                                bottom = boundingBox.bottom
+                            val boundingBox = detection.boundingBox()
+                            val graphicsRectF = RectF(
+                                boundingBox.left,
+                                boundingBox.top,
+                                boundingBox.right,
+                                boundingBox.bottom
                             )
 
                             val translated = translationManager.translate(label)
@@ -122,13 +130,11 @@ fun CameraScreen(navController: NavController) {
                                 id = index,
                                 label = label,
                                 translatedLabel = translated,
-                                boundingBox = composeRect,
+                                boundingBox = graphicsRectF,
                                 confidence = confidence
                             )
                         }
-                        // Update the state with new detections
                         detections = newDetections
-                        Log.i("ttt", detections.toString())
                     }
                 }
             }
@@ -137,8 +143,7 @@ fun CameraScreen(navController: NavController) {
 
     DisposableEffect(Unit) {
         onDispose {
-            // analyzer.close() // <-- Removed
-            objectDetectorHelper.clearObjectDetector() // <-- Added
+            objectDetectorHelper.clearObjectDetector()
             translationManager.close()
         }
     }
@@ -190,26 +195,30 @@ fun CameraScreen(navController: NavController) {
                             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                             cameraProviderFuture.addListener({
                                 val provider = cameraProviderFuture.get()
-                                val preview = Preview.Builder().build().also {
-                                    it.surfaceProvider = view.surfaceProvider
-                                }
+
+                                val preview = Preview.Builder()
+//                                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                                    .setTargetRotation(view.display.rotation)
+                                    .build()
+                                    .also {
+                                        it.surfaceProvider = view.surfaceProvider
+                                    }
 
                                 val imageCaptureBuilder = ImageCapture.Builder()
                                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                                     .setTargetRotation(view.display.rotation)
                                 imageCapture = imageCaptureBuilder.build()
 
-                                // <-- Updated ImageAnalysis to use the new helper -->
                                 val imageAnalysis = ImageAnalysis.Builder()
+//                                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                     .setTargetRotation(view.display.rotation)
+                                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                                     .build()
                                     .also {
                                         it.setAnalyzer(
-                                            Executors.newSingleThreadExecutor(),
+                                            Executors.newSingleThreadExecutor()
                                         ) { imageProxy ->
-                                            // Pass the frame to the helper.
-                                            // The helper is responsible for closing the ImageProxy.
                                             objectDetectorHelper.detectLivestreamFrame(imageProxy)
                                         }
                                     }
@@ -226,7 +235,7 @@ fun CameraScreen(navController: NavController) {
                                         imageAnalysis
                                     )
                                 } catch (e: Exception) {
-                                    println("Camera binding failed: ${e.message}")
+                                    Log.e("CameraScreen", "Camera binding failed: ${e.message}")
                                 }
                             }, ContextCompat.getMainExecutor(ctx))
                         }
@@ -234,22 +243,24 @@ fun CameraScreen(navController: NavController) {
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // Pass the image geometry state to the DetectionOverlay
                 DetectionOverlay(
                     detections = detections,
+                    inputImageHeight = inputImageHeight,
+                    inputImageWidth = inputImageWidth,
+                    inputImageRotation = inputImageRotation,
                     onBoxClicked = { detection ->
                         imageCapture?.takePicture(
                             ContextCompat.getMainExecutor(context),
                             object : ImageCapture.OnImageCapturedCallback() {
                                 override fun onCaptureSuccess(image: ImageProxy) {
                                     val bitmap = imageProxyToBitmap(image)
-                                    // Rotate bitmap based on image rotation
                                     val rotatedBitmap = rotateBitmap(
                                         bitmap,
                                         image.imageInfo.rotationDegrees.toFloat()
                                     )
                                     image.close()
 
-                                    // Store bitmap globally (not ideal but simplest for now)
                                     _root_ide_package_.com.lingualens.capturedBitmap = rotatedBitmap
 
                                     navController.navigate(
@@ -311,22 +322,88 @@ fun CameraScreen(navController: NavController) {
     }
 }
 
+/**
+ * A composable that displays detection results overlaid on the camera feed.
+ *
+ * This composable replicates the coordinate transformation logic from
+ * MediaPipe's official `OverlayView` class to correctly scale and rotate
+ * bounding boxes from the image coordinate space to the view coordinate space.
+ */
 @Composable
 private fun DetectionOverlay(
     detections: List<DetectionData>,
+    inputImageHeight: Int,
+    inputImageWidth: Int,
+    inputImageRotation: Int,
     onBoxClicked: (DetectionData) -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    // BoxWithConstraints is used to get the exact dimensions of the
+    // composable, which represent the "view" dimensions.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Get the view's width and height
+        val viewWidth = this.maxWidth.value
+        val viewHeight = this.maxHeight.value
+
+        // 1. Calculate rotated image dimensions
+        val (rotatedImageWidth, rotatedImageHeight) = when (inputImageRotation) {
+            0, 180 -> Pair(inputImageWidth, inputImageHeight)
+            90, 270 -> Pair(inputImageHeight, inputImageWidth) // Swap width and height
+            else -> return@BoxWithConstraints // Invalid rotation
+        }
+
+        // 2. Calculate scale factor.
+        // For LIVE_STREAM, MediaPipe uses FILL_START, which corresponds to max()
+        // This scales the image to fill the view, potentially cropping it.
+        val scaleFactor = max(
+            viewWidth / rotatedImageWidth,
+            viewHeight / rotatedImageHeight
+        )
+
+        // If the scale factor is 0, the view is not yet laid out.
+        if (scaleFactor == 0f) return@BoxWithConstraints
+
+        // 3. Iterate and transform each detection
         detections.forEach { detection ->
+            // Create a copy of the raw bounding box
+            val boxRect = RectF(detection.boundingBox)
+
+            // 4. Apply the matrix transformation
+            val matrix = Matrix()
+
+            // 4a. Move coordinate center to (0,0)
+            matrix.postTranslate(-inputImageWidth / 2f, -inputImageHeight / 2f)
+
+            // 4b. Rotate
+            matrix.postRotate(inputImageRotation.toFloat())
+
+            // 4c. Move coordinate center back, swapping dimensions if rotated 90/270
+            if (inputImageRotation == 90 || inputImageRotation == 270) {
+                matrix.postTranslate(inputImageHeight / 2f, inputImageWidth / 2f)
+            } else {
+                matrix.postTranslate(inputImageWidth / 2f, inputImageHeight / 2f)
+            }
+
+            // 4d. Apply the transformation to the bounding box
+            matrix.mapRect(boxRect)
+
+            // 5. Scale the transformed box to the view's coordinate space
+            val left = boxRect.left * scaleFactor
+            val top = boxRect.top * scaleFactor
+            val right = boxRect.right * scaleFactor
+            val bottom = boxRect.bottom * scaleFactor
+
+            // Use the calculated, scaled coordinates to draw the UI elements
+            // This is the same UI logic as the original file, but now
+            // using the *correct* coordinates.
             Column(
                 modifier = Modifier
                     .offset(
-                        x = detection.boundingBox.left.dp,
-                        y = detection.boundingBox.top.dp
+                        x = left.dp,
+                        y = top.dp
                     )
                     .size(
-                        width = detection.boundingBox.width.dp,
-                        height = detection.boundingBox.height.dp
+                        width = (right - left).dp,
+                        height = (bottom - top).dp
                     )
                     .border(
                         width = 3.dp,
@@ -347,7 +424,6 @@ private fun DetectionOverlay(
                         )
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    // Show both native and translated
                     if (detection.label != detection.translatedLabel) {
                         Text(
                             text = detection.label,
@@ -362,7 +438,6 @@ private fun DetectionOverlay(
                             fontWeight = FontWeight.Medium
                         )
                     } else {
-                        // If same (English selected), just show once
                         Text(
                             text = detection.label,
                             color = Black,
@@ -439,28 +514,26 @@ private fun LanguageSelector(
     }
 }
 
+/**
+ * Converts an [ImageProxy] (in JPEG format) to a [Bitmap].
+ * This is used for the ImageCapture use case.
+ */
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap {
+    // This assumes the ImageProxy format is JPEG, which is the default for ImageCapture
     val buffer = imageProxy.planes[0].buffer
     val bytes = ByteArray(buffer.remaining())
     buffer.get(bytes)
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }
 
+/**
+ * Rotates a [Bitmap] by the specified number of degrees.
+ */
 fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
     if (degrees == 0f) return bitmap
 
     val matrix = Matrix()
     matrix.postRotate(degrees)
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-}
-
-fun android.graphics.Rect.toComposeRect(
-    scaleX: Float = 1f,
-    scaleY: Float = 1f
-): androidx.compose.ui.geometry.Rect {
-    return androidx.compose.ui.geometry.Rect(
-        androidx.compose.ui.geometry.Offset(left * scaleX, top * scaleY),
-        androidx.compose.ui.geometry.Size(width() * scaleX, height() * scaleY)
-    )
 }
