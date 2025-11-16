@@ -197,7 +197,6 @@ fun CameraScreen(navController: NavController) {
                                 val provider = cameraProviderFuture.get()
 
                                 val preview = Preview.Builder()
-//                                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                                     .setTargetRotation(view.display.rotation)
                                     .build()
                                     .also {
@@ -210,7 +209,6 @@ fun CameraScreen(navController: NavController) {
                                 imageCapture = imageCaptureBuilder.build()
 
                                 val imageAnalysis = ImageAnalysis.Builder()
-//                                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                     .setTargetRotation(view.display.rotation)
                                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
