@@ -128,6 +128,7 @@ fun CameraScreen(navController: NavController) {
                         }
                         // Update the state with new detections
                         detections = newDetections
+                        Log.i("ttt", detections.toString())
                     }
                 }
             }

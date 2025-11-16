@@ -81,9 +81,9 @@ class ObjectDetectorHelper(
         }
 
         val modelName = when (currentModel) {
-            MODEL_EFFICIENTDETV0 -> "efficientdet-lite0.tflite"
-            MODEL_EFFICIENTDETV2 -> "efficientdet-lite2.tflite"
-            else -> "efficientdet-lite0.tflite"
+            MODEL_EFFICIENTDETV0 -> "efficientdet_lite0.tflite"
+            MODEL_EFFICIENTDETV2 -> "efficientdet_lite2.tflite"
+            else -> "ssd_mobilenet_v2.tflite"
         }
 
         baseOptionsBuilder.setModelAssetPath(modelName)
@@ -236,6 +236,7 @@ class ObjectDetectorHelper(
 
     // Runs object detection on live streaming cameras frame-by-frame and returns the results
     // asynchronously to the caller.
+    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     fun detectLivestreamFrame(imageProxy: ImageProxy) {
 
         if (runningMode != RunningMode.LIVE_STREAM) {
@@ -255,18 +256,53 @@ class ObjectDetectorHelper(
             return
         }
 
-        // --- Reverted to snippet logic ---
-        // This will now work because of the change in CameraScreen.kt
-        val bitmapBuffer = Bitmap.createBitmap(
-            imageProxy.width, imageProxy.height, Bitmap.Config.ARGB_8888
+        // Convert ImageProxy to MPImage
+        val mpImage = imageProxy.image?.let { mediaImage ->
+            com.google.mediapipe.framework.image.BitmapImageBuilder(
+                imageProxyToBitmap(imageProxy)
+            ).build()
+        }
+
+        imageProxy.close()
+
+        // Run detection if conversion was successful
+        mpImage?.let {
+            detectAsync(it, frameTime)
+        }
+    }
+
+    // Helper function to convert ImageProxy to Bitmap
+    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+    private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap {
+        val yBuffer = imageProxy.planes[0].buffer
+        val uBuffer = imageProxy.planes[1].buffer
+        val vBuffer = imageProxy.planes[2].buffer
+
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
+
+        val nv21 = ByteArray(ySize + uSize + vSize)
+
+        yBuffer.get(nv21, 0, ySize)
+        vBuffer.get(nv21, ySize, vSize)
+        uBuffer.get(nv21, ySize + vSize, uSize)
+
+        val yuvImage = android.graphics.YuvImage(
+            nv21,
+            android.graphics.ImageFormat.NV21,
+            imageProxy.width,
+            imageProxy.height,
+            null
         )
-        imageProxy.use { bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer) }
-        // imageProxy is closed by the 'use' block
-
-        // Convert the input Bitmap object to an MPImage object to run inference
-        val mpImage = BitmapImageBuilder(bitmapBuffer).build()
-
-        detectAsync(mpImage, frameTime)
+        val out = java.io.ByteArrayOutputStream()
+        yuvImage.compressToJpeg(
+            android.graphics.Rect(0, 0, imageProxy.width, imageProxy.height),
+            100,
+            out
+        )
+        val imageBytes = out.toByteArray()
+        return android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
     }
 
     // Run object detection using MediaPipe Object Detector API
