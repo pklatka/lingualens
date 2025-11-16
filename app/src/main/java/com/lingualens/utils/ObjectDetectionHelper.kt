@@ -22,7 +22,7 @@ class ObjectDetectorHelper(
     var threshold: Float = THRESHOLD_DEFAULT,
     var maxResults: Int = MAX_RESULTS_DEFAULT,
     var currentDelegate: Int = DELEGATE_CPU,
-    var currentModel: Int = MODEL_EFFICIENTDETV2,
+    var currentModel: Int = MODEL_EFFICIENTDETV0,
     var runningMode: RunningMode = RunningMode.LIVE_STREAM,
     val context: Context,
     var objectDetectorListener: DetectorListener? = null
