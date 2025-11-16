@@ -34,7 +34,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.lingualens.utils.ObjectDetectorHelper
-import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.lingualens.Screen
 import com.lingualens.ui.theme.Black
 import com.lingualens.ui.theme.BrandCyan
